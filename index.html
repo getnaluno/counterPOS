@@ -1,0 +1,35 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1">
+<title>Counter — Multi-Shop POS &amp; Inventory</title>
+<link rel="stylesheet" href="css/styles.css">
+</head>
+<body>
+<div id="app">
+  <header class="topbar">
+    <div class="brand">
+      <div class="brand-mark">C</div>
+      <div>
+        <div class="brand-name display">Counter</div>
+        <div class="brand-sub">Multi-Shop POS</div>
+      </div>
+      <span id="shopTag"></span>
+    </div>
+    <nav class="nav-pills" id="navPills"></nav>
+  </header>
+  <main id="viewRoot"><div class="loading-screen">Loading…</div></main>
+  <footer class="appfoot">Counter POS · v2.0<button class="devdot" id="devDot" title="" aria-label="hidden"></button></footer>
+</div>
+<div id="modalRoot"></div>
+<div id="toastRoot"></div>
+
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
+<script src="js/firebase-config.js"></script>
+<script src="js/firebase-storage.js"></script>
+
+<script src="js/app.js"></script>
+</body>
+</html>
