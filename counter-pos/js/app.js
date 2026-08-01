@@ -418,7 +418,7 @@ function showReceipt(order){
     </div>
   </div>`;
 }
-function closeReceipt(){ document.getElementById("modalRoot").innerHTML = ""; }
+function closeReceipt(){ document.getElementById("modalRoot").innerHTML = ""; render(); }
 
 /* ================= ADMIN ================= */
 function renderAdmin(){
@@ -732,7 +732,7 @@ async function changePassword(kind){
   else{ devSettings.devPassword = val; await saveDevSettings(); }
   toast("Password updated"); render();
 }
-function closeModal(){ document.getElementById("modalRoot").innerHTML = ""; }
+function closeModal(){ document.getElementById("modalRoot").innerHTML = ""; render(); }
 
 /* ================= DEVELOPER PANEL ================= */
 function renderDev(){
