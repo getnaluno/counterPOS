@@ -445,7 +445,7 @@ function showReceipt(order){
   const root = document.getElementById("modalRoot");
   root.innerHTML = `
   <div class="receipt-overlay" data-action="close-receipt">
-    <div class="receipt-card" onclick="event.stopPropagation()">
+    <div class="receipt-card">
       <div class="receipt-check">✓</div>
       <h3>Sale Complete</h3>
       <div class="rid">Order #${order.id.slice(-6).toUpperCase()} · ${fmtDate(order.date)}</div>
@@ -645,7 +645,7 @@ function openProductModal(id){
   const editing = id ? shopData.products.find(p=>p.id===id) : null;
   document.getElementById("modalRoot").innerHTML = `
   <div class="modal-backdrop" data-action="close-modal">
-    <div class="modal" onclick="event.stopPropagation()">
+    <div class="modal">
       <h3>${editing?'Edit Product':'Add Product'}</h3>
       <p class="m-note">${editing?'Update the details for this item.':'Fill in the details for the new item.'}</p>
       <div class="field-row">
@@ -690,7 +690,7 @@ function openDeleteConfirm(id){
   if(!p) return;
   document.getElementById("modalRoot").innerHTML = `
   <div class="modal-backdrop" data-action="close-modal">
-    <div class="modal" style="width:380px;" onclick="event.stopPropagation()">
+    <div class="modal" style="width:380px;">
       <h3>Delete “${esc(p.name)}”?</h3>
       <p class="m-note">Are you sure you want to delete this product? This can't be undone.</p>
       <div class="modal-actions">
@@ -707,7 +707,7 @@ function openStockSetModal(id){
   if(!p) return;
   document.getElementById("modalRoot").innerHTML = `
   <div class="modal-backdrop" data-action="close-modal">
-    <div class="modal" style="width:360px;" onclick="event.stopPropagation()">
+    <div class="modal" style="width:360px;">
       <h3>Set Stock — ${esc(p.name)}</h3>
       <p class="m-note">Current stock: ${p.stock}</p>
       <div class="field-row">
@@ -742,7 +742,7 @@ async function stockAdjust(id, delta){
 function openUserModal(){
   document.getElementById("modalRoot").innerHTML = `
   <div class="modal-backdrop" data-action="close-modal">
-    <div class="modal" style="width:360px;" onclick="event.stopPropagation()">
+    <div class="modal" style="width:360px;">
       <h3>Add Staff</h3>
       <div class="field" style="margin-bottom:12px;"><label>Name</label><input id="uf-name" placeholder="Jordan Lee"></div>
       <div class="field"><label>Role</label><select id="uf-role"><option value="Staff">Staff</option><option value="Admin">Admin</option></select></div>
@@ -835,7 +835,7 @@ function openClientModal(id){
   const editing = id ? clientsRegistry.clients.find(c=>c.id===id) : null;
   document.getElementById("modalRoot").innerHTML = `
   <div class="modal-backdrop" data-action="close-modal">
-    <div class="modal" onclick="event.stopPropagation()">
+    <div class="modal">
       <h3>${editing?'Edit Client':'New Client'}</h3>
       <p class="m-note">${editing?'Update this business\u2019s details.':'Create a shop account for a new pop-up business.'}</p>
       <div class="field" style="margin-bottom:12px;"><label>Business Name</label><input id="cf-name" value="${editing?esc(editing.businessName):''}" placeholder="Sunset Coffee Cart"></div>
@@ -901,7 +901,7 @@ function openDeleteClientConfirm(id){
   if(!c) return;
   document.getElementById("modalRoot").innerHTML = `
   <div class="modal-backdrop" data-action="close-modal">
-    <div class="modal" style="width:400px;" onclick="event.stopPropagation()">
+    <div class="modal" style="width:400px;">
       <h3>Delete “${esc(c.businessName)}”?</h3>
       <p class="m-note">This permanently removes the client and all of their products, orders and inventory history. This can't be undone.</p>
       <div class="modal-actions">
@@ -1004,6 +1004,19 @@ document.addEventListener("click", async (e)=>{
   if(!el) return;
   const action = el.dataset.action;
   const id = el.dataset.id;
+
+  // "close-modal" and "close-receipt" live on the backdrop/overlay itself so that
+  // clicking the dimmed area outside the card closes it. But the actual card is a
+  // descendant of that same backdrop, so a click on (say) an input, a label, or
+  // blank padding inside the card has no data-action of its own and would
+  // otherwise bubble up and match the backdrop's close action too. Only treat it
+  // as "click outside" if the backdrop element itself was the exact click target,
+  // not a bubbled descendant.
+  if((action === "close-modal" || action === "close-receipt") &&
+     (el.classList.contains("modal-backdrop") || el.classList.contains("receipt-overlay")) &&
+     e.target !== el){
+    return;
+  }
 
   try{
     switch(action){
