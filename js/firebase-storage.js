@@ -21,36 +21,56 @@
   const db = firebase.firestore();
   const collection = db.collection("counterPosData");
 
+  // Never let a Firestore call hang forever — if it hasn't answered within
+  // 8 seconds, give up and let the app continue (it'll just retry on the
+  // next save). Without this, a slow or flaky connection could leave a
+  // button's action stuck forever with no error and no way to tell.
+  function withTimeout(promise, ms){
+    return new Promise((resolve) => {
+      let done = false;
+      const timer = setTimeout(() => {
+        if(!done){ done = true; console.warn("Counter POS: a Firestore request timed out after", ms, "ms"); resolve({ __timedOut: true }); }
+      }, ms);
+      promise.then(
+        (val) => { if(!done){ done = true; clearTimeout(timer); resolve(val); } },
+        (err) => { if(!done){ done = true; clearTimeout(timer); resolve({ __timedOut: true, __error: err }); } }
+      );
+    });
+  }
+
   window.CounterStorageProvider = {
     async get(key, shared){
       try{
-        const doc = await collection.doc(key).get();
-        if(!doc.exists) return null;
+        const doc = await withTimeout(collection.doc(key).get(), 8000);
+        if(doc.__timedOut) return { __failed: true };
+        if(!doc.exists) return null; // genuinely no data saved under this key yet
         const data = doc.data();
         return { key, value: data.value, shared };
       }catch(e){
         console.error("Firestore get failed for", key, e);
-        return null;
+        return { __failed: true };
       }
     },
 
     async set(key, value, shared){
       try{
-        await collection.doc(key).set({ value, updatedAt: Date.now() });
+        const result = await withTimeout(collection.doc(key).set({ value, updatedAt: Date.now() }), 8000);
+        if(result && result.__timedOut) return { __failed: true };
         return { key, value, shared };
       }catch(e){
         console.error("Firestore set failed for", key, e);
-        return null;
+        return { __failed: true };
       }
     },
 
     async delete(key, shared){
       try{
-        await collection.doc(key).delete();
+        const result = await withTimeout(collection.doc(key).delete(), 8000);
+        if(result && result.__timedOut) return { __failed: true };
         return { key, deleted: true, shared };
       }catch(e){
         console.error("Firestore delete failed for", key, e);
-        return null;
+        return { __failed: true };
       }
     },
 
@@ -58,7 +78,8 @@
       try{
         // Firestore has no native "starts with" query on document IDs, so for
         // this app's small collection sizes we fetch and filter client-side.
-        const snap = await collection.get();
+        const snap = await withTimeout(collection.get(), 8000);
+        if(snap.__timedOut) return { __failed: true };
         const keys = [];
         snap.forEach(doc => {
           if(!prefix || doc.id.indexOf(prefix) === 0) keys.push(doc.id);
@@ -66,7 +87,7 @@
         return { keys };
       }catch(e){
         console.error("Firestore list failed for prefix", prefix, e);
-        return { keys: [] };
+        return { __failed: true };
       }
     }
   };
