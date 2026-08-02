@@ -180,16 +180,8 @@ async function loadAll(){
   try{ const r = await storageGet("pos-dev-settings", true); devSettings = r ? JSON.parse(r.value) : null; }catch(e){ devSettings = null; }
 
   if(!clientsRegistry){
-    const demoId = uid("cli");
-    clientsRegistry = { clients: [{
-      id: demoId, businessName: "Demo Pop-Up", shopCode: "DEMO01",
-      contactEmail: "owner@example.com", plan: "monthly",
-      subscriptionStart: new Date().toISOString(),
-      subscriptionEnd: addPlanDuration(new Date().toISOString(), "monthly"),
-      status: "active", adminPassword: "admin123", createdDate: new Date().toISOString()
-    }]};
+    clientsRegistry = { clients: [] };
     await saveClientsRegistry();
-    await storageSet("pos-shop-"+demoId, JSON.stringify({ products: seedProducts(), orders: [], invLog: [], staff: [{id:uid("stf"),name:"Staff One",role:"Staff"}] }), true);
   }
   if(!devSettings){ devSettings = { devPassword: "dev2026" }; await saveDevSettings(); }
 
@@ -199,14 +191,6 @@ async function loadAll(){
   }catch(e){ /* none saved yet */ }
 
   ready = true;
-}
-function seedProducts(){
-  const mk = (name,cat,price,stock) => ({ id: uid("prd"), name, category:cat, price, stock, image:"", description:"", status:"available", createdDate: new Date().toISOString() });
-  return [
-    mk("Cappuccino","Coffee",5,50), mk("Latte","Coffee",6,40), mk("Espresso","Coffee",4,60),
-    mk("Iced Tea","Drinks",4,20), mk("Bottled Water","Drinks",2,50),
-    mk("Cookie","Snacks",3,30), mk("Croissant","Snacks",4,25),
-  ];
 }
 let lastShopCodeHint = "";
 async function saveClientsRegistry(){ try{ await storageSet("pos-clients", JSON.stringify(clientsRegistry), true); }catch(e){ toast("Couldn't save client list — try again"); } }
@@ -270,7 +254,7 @@ function renderShopSelect(){
         <button class="btn btn-primary btn-block" data-action="enter-shop" data-target="customer">Open Counter</button>
       </div>
       <div class="select-err">${esc(shopSelectErr)}</div>
-      <div class="select-hint">New pop-up? Ask your Counter POS administrator to create a shop for you. Trying it out? Use code <strong>DEMO01</strong>.</div>
+      <div class="select-hint">New pop-up? Ask your Counter POS administrator for your shop code.</div>
     </div>
   </div>`;
 }
@@ -977,7 +961,7 @@ function devSystem(){
   </div>
   <div class="section-card">
     <h3 style="color:#fff;">Reset ALL Data</h3>
-    <p class="sc-note" style="color:#9a9a9a;">Deletes every client and their shop data, then reseeds the demo shop only. This cannot be undone.</p>
+    <p class="sc-note" style="color:#9a9a9a;">Deletes every client and their shop data, leaving the system completely empty. This cannot be undone.</p>
     <button class="btn btn-danger" style="border-color:#e88;color:#e88;" data-action="dev-reset-all">Reset Entire System</button>
   </div>`;
 }
@@ -998,12 +982,10 @@ async function devResetAll(){
     const list = await storageList("pos-shop-", true);
     if(list && list.keys){ for(const k of list.keys){ try{ await storageDelete(k, true); }catch(e){} } }
   }catch(e){}
-  const demoId = uid("cli");
-  clientsRegistry = { clients: [{ id: demoId, businessName:"Demo Pop-Up", shopCode:"DEMO01", contactEmail:"owner@example.com", plan:"monthly", subscriptionStart:new Date().toISOString(), subscriptionEnd: addPlanDuration(new Date().toISOString(),"monthly"), status:"active", adminPassword:"admin123", createdDate:new Date().toISOString() }] };
+  clientsRegistry = { clients: [] };
   await saveClientsRegistry();
-  await storageSet("pos-shop-"+demoId, JSON.stringify({ products: seedProducts(), orders: [], invLog: [], staff: [{id:uid("stf"),name:"Staff One",role:"Staff"}] }), true);
   currentClientId = null; view = "select"; devViewedClientId = null; devViewedShopData = null;
-  render(); toast("System reset — demo shop restored");
+  render(); toast("System reset — all clients and shop data cleared");
 }
 
 /* ================= EVENT WIRING ================= */
