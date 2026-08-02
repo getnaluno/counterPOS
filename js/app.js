@@ -673,7 +673,13 @@ function openProductModal(id){
         <div class="field"><label>Price</label><input id="pf-price" type="number" step="0.01" min="0" value="${editing?editing.price:''}" placeholder="5.00"></div>
         <div class="field"><label>Stock Quantity</label><input id="pf-stock" type="number" min="0" value="${editing?editing.stock:''}" placeholder="50"></div>
       </div>
-      <div class="field" style="margin-bottom:12px;"><label>Image URL (optional)</label><input id="pf-image" value="${editing?esc(editing.image):''}" placeholder="https://…"><div class="field-note">Any direct image link works. Google Drive share links (drive.google.com/file/d/...) are auto-converted — just make sure the file is shared as "Anyone with the link".</div></div>
+      <div class="field" style="margin-bottom:12px;">
+        <label>Product Photo (optional)</label>
+        <input id="pf-image-file" type="file" accept="image/*">
+        <div class="field-note">Upload a photo directly — it's stored with the product, so it always displays (no external link needed). Google Drive links unfortunately no longer work reliably as image links; Google blocks most hotlinking now.</div>
+        <div id="pf-image-preview" style="margin-top:8px;">${editing&&editing.image?`<img src="${esc(editing.image)}" style="max-width:120px;max-height:120px;border-radius:8px;display:block;">`:''}</div>
+      </div>
+      <div class="field" style="margin-bottom:12px;"><label>Or paste an image URL</label><input id="pf-image" value="${editing&&editing.image&&!editing.image.startsWith('data:')?esc(editing.image):''}" placeholder="https://…"></div>
       <div class="field" style="margin-bottom:12px;"><label>Description</label><textarea id="pf-desc">${editing?esc(editing.description):''}</textarea></div>
       <div class="field"><label>Status</label>
         <select id="pf-status">
@@ -687,13 +693,41 @@ function openProductModal(id){
       </div>
     </div>
   </div>`;
+  let uploadedImage = editing ? editing.image : null;
+  window.__pfUploadedImage = () => uploadedImage;
+  const fileInput = document.getElementById("pf-image-file");
+  fileInput.addEventListener("change", () => {
+    const file = fileInput.files[0];
+    if(!file) return;
+    const reader = new FileReader();
+    reader.onload = () => {
+      const img = new Image();
+      img.onload = () => {
+        const maxDim = 500;
+        let w = img.width, h = img.height;
+        if(w > h && w > maxDim){ h = Math.round(h * maxDim / w); w = maxDim; }
+        else if(h > maxDim){ w = Math.round(w * maxDim / h); h = maxDim; }
+        const canvas = document.createElement("canvas");
+        canvas.width = w; canvas.height = h;
+        canvas.getContext("2d").drawImage(img, 0, 0, w, h);
+        uploadedImage = canvas.toDataURL("image/jpeg", 0.8);
+        window.__pfUploadedImage = () => uploadedImage;
+        document.getElementById("pf-image-preview").innerHTML = `<img src="${uploadedImage}" style="max-width:120px;max-height:120px;border-radius:8px;display:block;">`;
+        document.getElementById("pf-image").value = ""; // uploaded photo takes priority over the URL field
+      };
+      img.src = reader.result;
+    };
+    reader.readAsDataURL(file);
+  });
 }
 async function saveProductFromModal(id){
   const name = document.getElementById("pf-name").value.trim();
   const category = document.getElementById("pf-cat").value.trim();
   const price = parseFloat(document.getElementById("pf-price").value);
   const stock = parseInt(document.getElementById("pf-stock").value,10);
-  const image = document.getElementById("pf-image").value.trim();
+  const urlField = document.getElementById("pf-image").value.trim();
+  const uploaded = window.__pfUploadedImage ? window.__pfUploadedImage() : null;
+  const image = urlField ? resolveImageUrl(urlField) : (uploaded || "");
   const description = document.getElementById("pf-desc").value.trim();
   const status = document.getElementById("pf-status").value;
   if(!name || isNaN(price) || price < 0 || isNaN(stock) || stock < 0){ toast("Please fill in a valid name, price and stock."); return; }
