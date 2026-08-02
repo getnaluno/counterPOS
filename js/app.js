@@ -25,6 +25,23 @@ const LOW_STOCK_THRESHOLD = 5;
 function uid(prefix){ return prefix + "_" + Date.now().toString(36) + Math.random().toString(36).slice(2,7); }
 function money(n){ return (Math.round((n + Number.EPSILON) * 100) / 100).toFixed(2); }
 function esc(s){ return String(s == null ? "" : s).replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c])); }
+// Google Drive's normal "Get link" button gives a viewer-page URL
+// (drive.google.com/file/d/FILE_ID/view or /open?id=FILE_ID) — that's an HTML
+// page, not an image, so <img src="..."> can never render it. If the saved
+// image URL looks like a Drive share link, rewrite it to Drive's direct
+// content endpoint so it actually displays. Any other URL passes through
+// unchanged.
+function resolveImageUrl(raw){
+  if(!raw) return raw;
+  const url = raw.trim();
+  if(!/drive\.google\.com/i.test(url)) return url;
+  let fileId = null;
+  let m = url.match(/\/file\/d\/([a-zA-Z0-9_-]+)/);
+  if(m) fileId = m[1];
+  if(!fileId){ m = url.match(/[?&]id=([a-zA-Z0-9_-]+)/); if(m) fileId = m[1]; }
+  if(!fileId) return url; // unrecognized Drive URL shape — leave as-is
+  return `https://drive.google.com/thumbnail?id=${fileId}&sz=w1000`;
+}
 function fmtDate(d){ const dt = new Date(d); return dt.toLocaleDateString(undefined,{month:"short",day:"numeric",year:"numeric"}) + " " + dt.toLocaleTimeString(undefined,{hour:"2-digit",minute:"2-digit"}); }
 function fmtDay(d){ return new Date(d).toLocaleDateString(undefined,{month:"short",day:"numeric",year:"numeric"}); }
 function isSameDay(a,b){ return a.getFullYear()===b.getFullYear() && a.getMonth()===b.getMonth() && a.getDate()===b.getDate(); }
@@ -344,7 +361,7 @@ function renderCustomer(){
     return `
     <div class="pcard ${disabled?'disabled':''}">
       <div class="pcard-img">
-        ${p.image ? `<img src="${esc(p.image)}" alt="${esc(p.name)}" onerror="this.parentElement.innerHTML='<div class=&quot;pcard-letter&quot;>${esc(p.name.charAt(0))}</div>'">` : `<div class="pcard-letter">${esc(p.name.charAt(0))}</div>`}
+        ${p.image ? `<img src="${esc(resolveImageUrl(p.image))}" alt="${esc(p.name)}" onerror="this.parentElement.innerHTML='<div class=&quot;pcard-letter&quot;>${esc(p.name.charAt(0))}</div>'">` : `<div class="pcard-letter">${esc(p.name.charAt(0))}</div>`}
         ${st.key==="low" ? `<span class="badge badge-low">Low Stock</span>` : ""}
         ${st.key==="out" ? `<span class="badge badge-out">Out of Stock</span>` : ""}
       </div>
@@ -525,7 +542,7 @@ function adminProducts(){
   const rows = shopData.products.map(p=>{
     const st = statusOf(p);
     return `<tr>
-      <td><div class="prod-cell"><div class="prod-thumb">${p.image?`<img src="${esc(p.image)}" onerror="this.parentElement.textContent='${esc(p.name.charAt(0))}'">`:esc(p.name.charAt(0))}</div>${esc(p.name)}</div></td>
+      <td><div class="prod-cell"><div class="prod-thumb">${p.image?`<img src="${esc(resolveImageUrl(p.image))}" onerror="this.parentElement.textContent='${esc(p.name.charAt(0))}'">`:esc(p.name.charAt(0))}</div>${esc(p.name)}</div></td>
       <td>${esc(p.category||"—")}</td><td>${money(p.price)}</td><td>${p.stock}</td>
       <td><span class="badge-tag tag-${st.key}">${st.label}</span></td>
       <td class="row-actions">
@@ -656,7 +673,7 @@ function openProductModal(id){
         <div class="field"><label>Price</label><input id="pf-price" type="number" step="0.01" min="0" value="${editing?editing.price:''}" placeholder="5.00"></div>
         <div class="field"><label>Stock Quantity</label><input id="pf-stock" type="number" min="0" value="${editing?editing.stock:''}" placeholder="50"></div>
       </div>
-      <div class="field" style="margin-bottom:12px;"><label>Image URL (optional)</label><input id="pf-image" value="${editing?esc(editing.image):''}" placeholder="https://…"></div>
+      <div class="field" style="margin-bottom:12px;"><label>Image URL (optional)</label><input id="pf-image" value="${editing?esc(editing.image):''}" placeholder="https://…"><div class="field-note">Any direct image link works. Google Drive share links (drive.google.com/file/d/...) are auto-converted — just make sure the file is shared as "Anyone with the link".</div></div>
       <div class="field" style="margin-bottom:12px;"><label>Description</label><textarea id="pf-desc">${editing?esc(editing.description):''}</textarea></div>
       <div class="field"><label>Status</label>
         <select id="pf-status">
