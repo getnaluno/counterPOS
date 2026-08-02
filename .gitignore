@@ -1,0 +1,5 @@
+# Real Firebase credentials — copy firebase-config.example.js to this file locally
+js/firebase-config.js
+
+.DS_Store
+*.log

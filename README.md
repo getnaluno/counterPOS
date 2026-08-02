@@ -31,14 +31,21 @@ device.
    ```
    npx serve counter-pos
    ```
-3. On the "Enter Shop Code" screen, use demo shop code **DEMO01**
-   (admin password `admin123`).
-4. Open the Developer panel via the small dot in the footer
-   (password `dev2026`) to create new pop-up clients, approve/renew
-   subscriptions, or suspend a shop.
+3. The system starts completely empty — no demo shop, no sample products.
+   Open the Developer panel via the small dot in the footer
+   (default password `dev2026`) and click **+ New Client** to create your
+   first pop-up shop. You'll get a shop code — that's what you (or the
+   business) use on the "Enter Shop Code" screen to open its Counter or
+   Admin.
+4. Log into that shop's Admin (the password you set when creating the
+   client) and go to **Products → + Add Product** to start building its
+   menu.
 
-**Change both default passwords** (Admin → Security, Developer → Security)
-before giving this to anyone else.
+**Change the developer password** (Developer → Security) before giving this
+to anyone else — the `dev2026` default is only meant to get you in the
+first time. Each shop's admin password is whatever you set for it when
+creating that client (Developer → Clients → New Client), and can be changed
+per-shop under Admin → Security.
 
 ## Multi-device / shared data
 
