@@ -62,13 +62,15 @@ function genShopCode(){
 }
 function getCurrentClient(){ return clientsRegistry.clients.find(c=>c.id===currentClientId) || null; }
 
-/* ---- safe storage layer ----
+/* ---- storage layer, with real offline support ----
    - shared:false data (e.g. "remember my last shop code on this device") always
      stays in this browser's localStorage — it's personal, not business data.
-   - shared:true data uses, in order of preference:
-       1) window.CounterStorageProvider, if a backend script (e.g. Firebase) defines one
-       2) window.storage, the built-in Claude artifact storage API
-       3) localStorage, as a last-resort single-device fallback
+   - shared:true data uses a cloud provider when available (window.CounterStorageProvider,
+     e.g. Firebase — or window.storage, the built-in Claude artifact storage API), but
+     EVERY successful cloud read/write is also mirrored into localStorage as an offline
+     cache. If the cloud is unreachable (no connection, Firestore down, etc.), reads and
+     writes automatically fall back to that local cache instead of silently failing —
+     the app keeps working, and the person is told they're working offline via a toast.
    None of these ever throw — every call is safe to await. ---- */
 const hasCloudStorage = (typeof window !== "undefined") && window.storage && typeof window.storage.get === "function";
 function localGet(key){
@@ -90,29 +92,80 @@ function localList(prefix){
     return { keys };
   }catch(e){ return { keys: [] }; }
 }
+function getCloudProvider(){
+  if(window.CounterStorageProvider) return window.CounterStorageProvider;
+  if(hasCloudStorage) return window.storage;
+  return null;
+}
+let __offlineToastShownAt = 0;
+function offlineToast(msg){
+  // avoid spamming a toast for every single field save during a rocky connection
+  const now = Date.now();
+  if(now - __offlineToastShownAt > 4000){ __offlineToastShownAt = now; toast(msg); }
+}
 async function storageGet(key, shared){
   if(!shared) return localGet(key);
-  if(window.CounterStorageProvider){ try{ return await window.CounterStorageProvider.get(key, shared); }catch(e){ return null; } }
-  if(hasCloudStorage){ try{ return await window.storage.get(key, shared); }catch(e){ return null; } }
-  return localGet(key);
+  const provider = getCloudProvider();
+  if(!provider) return localGet(key);
+  try{
+    const result = await provider.get(key, shared);
+    if(result && result.__failed){
+      const cached = localGet(key);
+      offlineToast(cached ? "Offline — showing your last saved data." : "Offline — no saved data on this device yet.");
+      return cached;
+    }
+    if(result){ localSet(key, result.value); return result; } // keep offline cache fresh
+    return null; // genuinely no data saved anywhere yet
+  }catch(e){
+    const cached = localGet(key);
+    offlineToast(cached ? "Offline — showing your last saved data." : "Offline — no saved data on this device yet.");
+    return cached;
+  }
 }
 async function storageSet(key, value, shared){
   if(!shared) return localSet(key, value);
-  if(window.CounterStorageProvider){ try{ return await window.CounterStorageProvider.set(key, value, shared); }catch(e){ return null; } }
-  if(hasCloudStorage){ try{ return await window.storage.set(key, value, shared); }catch(e){ return null; } }
-  return localSet(key, value);
+  const provider = getCloudProvider();
+  if(!provider) return localSet(key, value);
+  try{
+    const result = await provider.set(key, value, shared);
+    if(result && result.__failed){
+      offlineToast("Offline — saved on this device, will sync once you're back online.");
+      return localSet(key, value);
+    }
+    if(result){ localSet(key, value); return result; } // keep offline cache in sync too
+    offlineToast("Offline — saved on this device, will sync once you're back online.");
+    return localSet(key, value);
+  }catch(e){
+    offlineToast("Offline — saved on this device, will sync once you're back online.");
+    return localSet(key, value);
+  }
 }
 async function storageDelete(key, shared){
   if(!shared) return localDelete(key);
-  if(window.CounterStorageProvider){ try{ return await window.CounterStorageProvider.delete(key, shared); }catch(e){ return null; } }
-  if(hasCloudStorage){ try{ return await window.storage.delete(key, shared); }catch(e){ return null; } }
-  return localDelete(key);
+  const provider = getCloudProvider();
+  if(!provider) return localDelete(key);
+  try{
+    const result = await provider.delete(key, shared);
+    localDelete(key); // keep offline cache in sync regardless
+    if(result && result.__failed) offlineToast("Offline — removed on this device, will sync once you're back online.");
+    return result && !result.__failed ? result : { key, deleted:true };
+  }catch(e){
+    localDelete(key);
+    offlineToast("Offline — removed on this device, will sync once you're back online.");
+    return { key, deleted:true };
+  }
 }
 async function storageList(prefix, shared){
   if(!shared) return localList(prefix);
-  if(window.CounterStorageProvider){ try{ return await window.CounterStorageProvider.list(prefix, shared); }catch(e){ return { keys: [] }; } }
-  if(hasCloudStorage){ try{ return await window.storage.list(prefix, shared); }catch(e){ return { keys: [] }; } }
-  return localList(prefix);
+  const provider = getCloudProvider();
+  if(!provider) return localList(prefix);
+  try{
+    const result = await provider.list(prefix, shared);
+    if(result && result.__failed) return localList(prefix);
+    return result || { keys: [] };
+  }catch(e){
+    return localList(prefix);
+  }
 }
 function effectiveStatus(client){
   if(!client) return {key:"missing", label:"Not Found"};
@@ -418,7 +471,7 @@ function showReceipt(order){
     </div>
   </div>`;
 }
-function closeReceipt(){ document.getElementById("modalRoot").innerHTML = ""; }
+function closeReceipt(){ document.getElementById("modalRoot").innerHTML = ""; render(); }
 
 /* ================= ADMIN ================= */
 function renderAdmin(){
@@ -732,7 +785,7 @@ async function changePassword(kind){
   else{ devSettings.devPassword = val; await saveDevSettings(); }
   toast("Password updated"); render();
 }
-function closeModal(){ document.getElementById("modalRoot").innerHTML = ""; }
+function closeModal(){ document.getElementById("modalRoot").innerHTML = ""; render(); }
 
 /* ================= DEVELOPER PANEL ================= */
 function renderDev(){
