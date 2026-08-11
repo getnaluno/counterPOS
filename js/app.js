@@ -25,23 +25,6 @@ const LOW_STOCK_THRESHOLD = 5;
 function uid(prefix){ return prefix + "_" + Date.now().toString(36) + Math.random().toString(36).slice(2,7); }
 function money(n){ return (Math.round((n + Number.EPSILON) * 100) / 100).toFixed(2); }
 function esc(s){ return String(s == null ? "" : s).replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c])); }
-// Google Drive's normal "Get link" button gives a viewer-page URL
-// (drive.google.com/file/d/FILE_ID/view or /open?id=FILE_ID) — that's an HTML
-// page, not an image, so <img src="..."> can never render it. If the saved
-// image URL looks like a Drive share link, rewrite it to Drive's direct
-// content endpoint so it actually displays. Any other URL passes through
-// unchanged.
-function resolveImageUrl(raw){
-  if(!raw) return raw;
-  const url = raw.trim();
-  if(!/drive\.google\.com/i.test(url)) return url;
-  let fileId = null;
-  let m = url.match(/\/file\/d\/([a-zA-Z0-9_-]+)/);
-  if(m) fileId = m[1];
-  if(!fileId){ m = url.match(/[?&]id=([a-zA-Z0-9_-]+)/); if(m) fileId = m[1]; }
-  if(!fileId) return url; // unrecognized Drive URL shape — leave as-is
-  return `https://drive.google.com/thumbnail?id=${fileId}&sz=w1000`;
-}
 function fmtDate(d){ const dt = new Date(d); return dt.toLocaleDateString(undefined,{month:"short",day:"numeric",year:"numeric"}) + " " + dt.toLocaleTimeString(undefined,{hour:"2-digit",minute:"2-digit"}); }
 function fmtDay(d){ return new Date(d).toLocaleDateString(undefined,{month:"short",day:"numeric",year:"numeric"}); }
 function isSameDay(a,b){ return a.getFullYear()===b.getFullYear() && a.getMonth()===b.getMonth() && a.getDate()===b.getDate(); }
@@ -361,7 +344,7 @@ function renderCustomer(){
     return `
     <div class="pcard ${disabled?'disabled':''}">
       <div class="pcard-img">
-        ${p.image ? `<img src="${esc(resolveImageUrl(p.image))}" alt="${esc(p.name)}" onerror="this.parentElement.innerHTML='<div class=&quot;pcard-letter&quot;>${esc(p.name.charAt(0))}</div>'">` : `<div class="pcard-letter">${esc(p.name.charAt(0))}</div>`}
+        ${p.image ? `<img src="${esc(p.image)}" alt="${esc(p.name)}" loading="lazy" decoding="async" onerror="this.parentElement.innerHTML='<div class=&quot;pcard-letter&quot;>${esc(p.name.charAt(0))}</div>'">` : `<div class="pcard-letter">${esc(p.name.charAt(0))}</div>`}
         ${st.key==="low" ? `<span class="badge badge-low">Low Stock</span>` : ""}
         ${st.key==="out" ? `<span class="badge badge-out">Out of Stock</span>` : ""}
       </div>
@@ -376,6 +359,24 @@ function renderCustomer(){
     </div>`;
   }).join("") : `<div class="empty-note">No products here yet. Add some from the Admin dashboard → Products.</div>`;
 
+  return `
+  <div class="pos-wrap">
+    <div class="pos-menu">
+      <div class="pos-hero">
+        <h1 class="display">Choose Your Order</h1>
+        <p>Tap a product to add it to the ticket, then pay at the counter.</p>
+      </div>
+      <div class="chip-row">${cats.map(c=>`<button class="chip ${categoryFilter===c?'active':''}" data-action="filter-cat" data-cat="${esc(c)}">${esc(c)}</button>`).join("")}</div>
+      <div class="product-grid">${cards}</div>
+    </div>
+    <div class="ticket-col" id="ticketCol">${renderTicketColInner()}</div>
+  </div>`;
+}
+
+/* Ticket markup is split out so a tap on a product can refresh just the ticket
+   (and that one button) instead of rebuilding the whole product grid + images
+   on every tap — this is what was causing the slowdown during busy periods. */
+function renderTicketColInner(){
   const ticketRows = cart.length ? cart.map(c=>{
     const p = shopData.products.find(pp=>pp.id===c.productId);
     if(!p) return "";
@@ -395,29 +396,31 @@ function renderCustomer(){
   const itemCount = cart.reduce((n,c)=>n+c.qty,0);
 
   return `
-  <div class="pos-wrap">
-    <div class="pos-menu">
-      <div class="pos-hero">
-        <h1 class="display">Choose Your Order</h1>
-        <p>Tap a product to add it to the ticket, then pay at the counter.</p>
-      </div>
-      <div class="chip-row">${cats.map(c=>`<button class="chip ${categoryFilter===c?'active':''}" data-action="filter-cat" data-cat="${esc(c)}">${esc(c)}</button>`).join("")}</div>
-      <div class="product-grid">${cards}</div>
-    </div>
-    <div class="ticket-col">
-      <div class="ticket">
-        <div class="ticket-head"><h2>Order Ticket</h2><span class="ticket-num">#${String(shopData.orders.length+1).padStart(4,'0')}</span></div>
-        <div class="ticket-sub">${new Date().toLocaleDateString(undefined,{weekday:'short',month:'short',day:'numeric'})} · ${itemCount} item${itemCount===1?'':'s'}</div>
-        <div class="ticket-items">${ticketRows}</div>
-        <div class="ticket-total-row"><span class="ticket-total-label">Total</span><span class="ticket-total-amt">${money(total)}</span></div>
-      </div>
-      <div class="torn-edge"></div>
-      <div class="ticket-pay">
-        <button class="btn btn-primary btn-block" data-action="checkout" ${cart.length?'':'disabled'}>Pay ${cart.length?money(total):''}</button>
-        ${cart.length ? `<button class="btn btn-ghost btn-block" data-action="cart-clear" style="margin-top:6px;">Clear ticket</button>` : ""}
-      </div>
-    </div>
+  <div class="ticket">
+    <div class="ticket-head"><h2>Order Ticket</h2><span class="ticket-num">#${String(shopData.orders.length+1).padStart(4,'0')}</span></div>
+    <div class="ticket-sub">${new Date().toLocaleDateString(undefined,{weekday:'short',month:'short',day:'numeric'})} · ${itemCount} item${itemCount===1?'':'s'}</div>
+    <div class="ticket-items">${ticketRows}</div>
+    <div class="ticket-total-row"><span class="ticket-total-label">Total</span><span class="ticket-total-amt">${money(total)}</span></div>
+  </div>
+  <div class="torn-edge"></div>
+  <div class="ticket-pay">
+    <button class="btn btn-primary btn-block" data-action="checkout" ${cart.length?'':'disabled'}>Pay ${cart.length?money(total):''}</button>
+    ${cart.length ? `<button class="btn btn-ghost btn-block" data-action="cart-clear" style="margin-top:6px;">Clear ticket</button>` : ""}
   </div>`;
+}
+
+/* Fast path for cart taps: patch the ticket column and the one tapped
+   product's button directly, skipping the full-page rebuild. Falls back to
+   a normal full render() if the customer screen isn't actually on-screen
+   (e.g. called from somewhere unexpected) so nothing can go stale. */
+function refreshCartUI(touchedId){
+  const ticketCol = document.getElementById("ticketCol");
+  if(!ticketCol || view !== "customer"){ render(); return; }
+  ticketCol.innerHTML = renderTicketColInner();
+  if(touchedId){
+    const btn = document.querySelector(`.add-btn[data-action="cart-add"][data-id="${CSS.escape(touchedId)}"]`);
+    if(btn){ const inCart = cart.find(c=>c.productId===touchedId); btn.textContent = inCart ? inCart.qty : "+"; }
+  }
 }
 
 let cart = [];
@@ -428,7 +431,7 @@ function cartAdd(id){
   const currentQty = existing ? existing.qty : 0;
   if(currentQty + 1 > p.stock){ toast(`Only ${p.stock} ${p.name} left`); return; }
   if(existing) existing.qty += 1; else cart.push({productId:id, qty:1});
-  render();
+  refreshCartUI(id);
 }
 function cartInc(id){ cartAdd(id); }
 function cartDec(id){
@@ -436,7 +439,7 @@ function cartDec(id){
   if(!existing) return;
   existing.qty -= 1;
   if(existing.qty <= 0) cart = cart.filter(c=>c.productId!==id);
-  render();
+  refreshCartUI(id);
 }
 function cartClear(){ cart = []; render(); }
 
@@ -462,7 +465,7 @@ function showReceipt(order){
   const root = document.getElementById("modalRoot");
   root.innerHTML = `
   <div class="receipt-overlay" data-action="close-receipt">
-    <div class="receipt-card">
+    <div class="receipt-card" onclick="event.stopPropagation()">
       <div class="receipt-check">✓</div>
       <h3>Sale Complete</h3>
       <div class="rid">Order #${order.id.slice(-6).toUpperCase()} · ${fmtDate(order.date)}</div>
@@ -542,7 +545,7 @@ function adminProducts(){
   const rows = shopData.products.map(p=>{
     const st = statusOf(p);
     return `<tr>
-      <td><div class="prod-cell"><div class="prod-thumb">${p.image?`<img src="${esc(resolveImageUrl(p.image))}" onerror="this.parentElement.textContent='${esc(p.name.charAt(0))}'">`:esc(p.name.charAt(0))}</div>${esc(p.name)}</div></td>
+      <td><div class="prod-cell"><div class="prod-thumb">${p.image?`<img src="${esc(p.image)}" onerror="this.parentElement.textContent='${esc(p.name.charAt(0))}'">`:esc(p.name.charAt(0))}</div>${esc(p.name)}</div></td>
       <td>${esc(p.category||"—")}</td><td>${money(p.price)}</td><td>${p.stock}</td>
       <td><span class="badge-tag tag-${st.key}">${st.label}</span></td>
       <td class="row-actions">
@@ -662,7 +665,7 @@ function openProductModal(id){
   const editing = id ? shopData.products.find(p=>p.id===id) : null;
   document.getElementById("modalRoot").innerHTML = `
   <div class="modal-backdrop" data-action="close-modal">
-    <div class="modal">
+    <div class="modal" onclick="event.stopPropagation()">
       <h3>${editing?'Edit Product':'Add Product'}</h3>
       <p class="m-note">${editing?'Update the details for this item.':'Fill in the details for the new item.'}</p>
       <div class="field-row">
@@ -673,13 +676,7 @@ function openProductModal(id){
         <div class="field"><label>Price</label><input id="pf-price" type="number" step="0.01" min="0" value="${editing?editing.price:''}" placeholder="5.00"></div>
         <div class="field"><label>Stock Quantity</label><input id="pf-stock" type="number" min="0" value="${editing?editing.stock:''}" placeholder="50"></div>
       </div>
-      <div class="field" style="margin-bottom:12px;">
-        <label>Product Photo (optional)</label>
-        <input id="pf-image-file" type="file" accept="image/*">
-        <div class="field-note">Upload a photo directly — it's stored with the product, so it always displays (no external link needed). Google Drive links unfortunately no longer work reliably as image links; Google blocks most hotlinking now.</div>
-        <div id="pf-image-preview" style="margin-top:8px;">${editing&&editing.image?`<img src="${esc(editing.image)}" style="max-width:120px;max-height:120px;border-radius:8px;display:block;">`:''}</div>
-      </div>
-      <div class="field" style="margin-bottom:12px;"><label>Or paste an image URL</label><input id="pf-image" value="${editing&&editing.image&&!editing.image.startsWith('data:')?esc(editing.image):''}" placeholder="https://…"></div>
+      <div class="field" style="margin-bottom:12px;"><label>Image URL (optional)</label><input id="pf-image" value="${editing?esc(editing.image):''}" placeholder="https://…"></div>
       <div class="field" style="margin-bottom:12px;"><label>Description</label><textarea id="pf-desc">${editing?esc(editing.description):''}</textarea></div>
       <div class="field"><label>Status</label>
         <select id="pf-status">
@@ -693,41 +690,13 @@ function openProductModal(id){
       </div>
     </div>
   </div>`;
-  let uploadedImage = editing ? editing.image : null;
-  window.__pfUploadedImage = () => uploadedImage;
-  const fileInput = document.getElementById("pf-image-file");
-  fileInput.addEventListener("change", () => {
-    const file = fileInput.files[0];
-    if(!file) return;
-    const reader = new FileReader();
-    reader.onload = () => {
-      const img = new Image();
-      img.onload = () => {
-        const maxDim = 500;
-        let w = img.width, h = img.height;
-        if(w > h && w > maxDim){ h = Math.round(h * maxDim / w); w = maxDim; }
-        else if(h > maxDim){ w = Math.round(w * maxDim / h); h = maxDim; }
-        const canvas = document.createElement("canvas");
-        canvas.width = w; canvas.height = h;
-        canvas.getContext("2d").drawImage(img, 0, 0, w, h);
-        uploadedImage = canvas.toDataURL("image/jpeg", 0.8);
-        window.__pfUploadedImage = () => uploadedImage;
-        document.getElementById("pf-image-preview").innerHTML = `<img src="${uploadedImage}" style="max-width:120px;max-height:120px;border-radius:8px;display:block;">`;
-        document.getElementById("pf-image").value = ""; // uploaded photo takes priority over the URL field
-      };
-      img.src = reader.result;
-    };
-    reader.readAsDataURL(file);
-  });
 }
 async function saveProductFromModal(id){
   const name = document.getElementById("pf-name").value.trim();
   const category = document.getElementById("pf-cat").value.trim();
   const price = parseFloat(document.getElementById("pf-price").value);
   const stock = parseInt(document.getElementById("pf-stock").value,10);
-  const urlField = document.getElementById("pf-image").value.trim();
-  const uploaded = window.__pfUploadedImage ? window.__pfUploadedImage() : null;
-  const image = urlField ? resolveImageUrl(urlField) : (uploaded || "");
+  const image = document.getElementById("pf-image").value.trim();
   const description = document.getElementById("pf-desc").value.trim();
   const status = document.getElementById("pf-status").value;
   if(!name || isNaN(price) || price < 0 || isNaN(stock) || stock < 0){ toast("Please fill in a valid name, price and stock."); return; }
@@ -741,7 +710,7 @@ function openDeleteConfirm(id){
   if(!p) return;
   document.getElementById("modalRoot").innerHTML = `
   <div class="modal-backdrop" data-action="close-modal">
-    <div class="modal" style="width:380px;">
+    <div class="modal" style="width:380px;" onclick="event.stopPropagation()">
       <h3>Delete “${esc(p.name)}”?</h3>
       <p class="m-note">Are you sure you want to delete this product? This can't be undone.</p>
       <div class="modal-actions">
@@ -758,7 +727,7 @@ function openStockSetModal(id){
   if(!p) return;
   document.getElementById("modalRoot").innerHTML = `
   <div class="modal-backdrop" data-action="close-modal">
-    <div class="modal" style="width:360px;">
+    <div class="modal" style="width:360px;" onclick="event.stopPropagation()">
       <h3>Set Stock — ${esc(p.name)}</h3>
       <p class="m-note">Current stock: ${p.stock}</p>
       <div class="field-row">
@@ -793,7 +762,7 @@ async function stockAdjust(id, delta){
 function openUserModal(){
   document.getElementById("modalRoot").innerHTML = `
   <div class="modal-backdrop" data-action="close-modal">
-    <div class="modal" style="width:360px;">
+    <div class="modal" style="width:360px;" onclick="event.stopPropagation()">
       <h3>Add Staff</h3>
       <div class="field" style="margin-bottom:12px;"><label>Name</label><input id="uf-name" placeholder="Jordan Lee"></div>
       <div class="field"><label>Role</label><select id="uf-role"><option value="Staff">Staff</option><option value="Admin">Admin</option></select></div>
@@ -886,7 +855,7 @@ function openClientModal(id){
   const editing = id ? clientsRegistry.clients.find(c=>c.id===id) : null;
   document.getElementById("modalRoot").innerHTML = `
   <div class="modal-backdrop" data-action="close-modal">
-    <div class="modal">
+    <div class="modal" onclick="event.stopPropagation()">
       <h3>${editing?'Edit Client':'New Client'}</h3>
       <p class="m-note">${editing?'Update this business\u2019s details.':'Create a shop account for a new pop-up business.'}</p>
       <div class="field" style="margin-bottom:12px;"><label>Business Name</label><input id="cf-name" value="${editing?esc(editing.businessName):''}" placeholder="Sunset Coffee Cart"></div>
@@ -952,7 +921,7 @@ function openDeleteClientConfirm(id){
   if(!c) return;
   document.getElementById("modalRoot").innerHTML = `
   <div class="modal-backdrop" data-action="close-modal">
-    <div class="modal" style="width:400px;">
+    <div class="modal" style="width:400px;" onclick="event.stopPropagation()">
       <h3>Delete “${esc(c.businessName)}”?</h3>
       <p class="m-note">This permanently removes the client and all of their products, orders and inventory history. This can't be undone.</p>
       <div class="modal-actions">
@@ -1056,19 +1025,6 @@ document.addEventListener("click", async (e)=>{
   const action = el.dataset.action;
   const id = el.dataset.id;
 
-  // "close-modal" and "close-receipt" live on the backdrop/overlay itself so that
-  // clicking the dimmed area outside the card closes it. But the actual card is a
-  // descendant of that same backdrop, so a click on (say) an input, a label, or
-  // blank padding inside the card has no data-action of its own and would
-  // otherwise bubble up and match the backdrop's close action too. Only treat it
-  // as "click outside" if the backdrop element itself was the exact click target,
-  // not a bubbled descendant.
-  if((action === "close-modal" || action === "close-receipt") &&
-     (el.classList.contains("modal-backdrop") || el.classList.contains("receipt-overlay")) &&
-     e.target !== el){
-    return;
-  }
-
   try{
     switch(action){
       case "filter-cat": categoryFilter = el.dataset.cat; render(); break;
@@ -1118,6 +1074,9 @@ document.addEventListener("click", async (e)=>{
 
       case "dev-export": await devExport(); break;
       case "dev-reset-all": if(confirm("Reset the ENTIRE system? All clients and shop data will be deleted. This cannot be undone.")) await devResetAll(); break;
+
+      case "install-app": promptInstall(); break;
+      case "dismiss-install-banner": dismissInstallBanner(); break;
     }
   }catch(err){
     console.error("Action failed:", action, err);
@@ -1135,6 +1094,53 @@ document.addEventListener("keydown", (e)=>{
     if(code && document.activeElement === code){ enterShop("customer"); }
   }
 });
+
+/* ================= INSTALL PROMPT (PWA) ================= */
+let deferredInstallPrompt = null;
+function isStandalone(){
+  return window.matchMedia("(display-mode: standalone)").matches || window.navigator.standalone === true;
+}
+function showInstallBanner(mode){
+  if(sessionStorage.getItem("cpos:installDismissed")) return;
+  if(document.getElementById("installBanner")) return;
+  const bar = document.createElement("div");
+  bar.id = "installBanner";
+  bar.className = "install-banner";
+  bar.innerHTML = mode === "ios"
+    ? `<span>Install Counter for quick, full-screen access: tap <strong>Share</strong> → <strong>Add to Home Screen</strong>.</span>
+       <button class="btn btn-ghost btn-sm" data-action="dismiss-install-banner">Got it</button>`
+    : `<span>Install Counter for faster, full-screen access on this device.</span>
+       <button class="btn btn-primary btn-sm" data-action="install-app">Install</button>
+       <button class="btn btn-ghost btn-sm" data-action="dismiss-install-banner">Not now</button>`;
+  document.body.appendChild(bar);
+}
+function dismissInstallBanner(){
+  sessionStorage.setItem("cpos:installDismissed", "1");
+  const bar = document.getElementById("installBanner");
+  if(bar) bar.remove();
+}
+function promptInstall(){
+  if(!deferredInstallPrompt) return;
+  deferredInstallPrompt.prompt();
+  deferredInstallPrompt.userChoice.finally(()=>{ deferredInstallPrompt = null; dismissInstallBanner(); });
+}
+window.addEventListener("beforeinstallprompt", (e)=>{
+  e.preventDefault();
+  deferredInstallPrompt = e;
+  if(!isStandalone()) showInstallBanner("prompt");
+});
+window.addEventListener("appinstalled", ()=>{
+  deferredInstallPrompt = null;
+  dismissInstallBanner();
+  toast("Counter installed");
+});
+(function maybeShowIOSInstallHint(){
+  const isIOS = /iphone|ipad|ipod/i.test(navigator.userAgent) && !window.MSStream;
+  if(isIOS && !isStandalone()) showInstallBanner("ios");
+})();
+if("serviceWorker" in navigator){
+  window.addEventListener("load", ()=>{ navigator.serviceWorker.register("sw.js").catch(()=>{}); });
+}
 
 /* ---------------- init ---------------- */
 loadAll().then(render).catch(function(err){
