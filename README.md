@@ -74,3 +74,18 @@ Firestore backend, anyone with your Firebase web config could read/write
 data directly, bypassing the password screens. See the "Hardening" section
 of FIREBASE_SETUP.md before treating this as production-grade for
 unrelated businesses' real payment/inventory data.
+
+## Recent changes
+
+- **Faster during rush hours.** Tapping a product used to rebuild the entire
+  screen (every product card and image) on every single tap. Cart taps now
+  only update the ticket panel and the one button that changed, so busy
+  counters stay snappy no matter how many products are on the menu.
+- **Installable app.** Opening the app now offers to install it (via
+  `manifest.json`, app icons in `icons/`, and `sw.js`). On Android/desktop
+  Chrome/Edge this is a native "Install" prompt; on iOS it's a banner
+  pointing to Share → Add to Home Screen (iOS doesn't support the native
+  prompt). Installing just gives a full-screen, app-like shortcut — it
+  doesn't change how data is stored or synced.
+- **Admin password change** already existed (Admin → Security once signed
+  in) — confirmed still working, no changes needed there.

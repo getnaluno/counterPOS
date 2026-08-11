@@ -245,6 +245,11 @@
   pre.rawjson{background:#111316;color:#9BE39B;padding:14px;border-radius:4px;font-size:11.5px;overflow-x:auto;max-height:340px;}
 
   .toast{position:fixed;bottom:20px;left:50%;transform:translateX(-50%);background:var(--ink);color:var(--paper);padding:12px 20px;border-radius:5px;font-size:13.5px;z-index:200;box-shadow:0 6px 20px rgba(0,0,0,0.25);}
+  .install-banner{position:fixed;left:0;right:0;bottom:0;z-index:80;display:flex;flex-wrap:wrap;align-items:center;gap:10px 14px;background:var(--ink);color:var(--paper);padding:12px 16px;padding-bottom:calc(12px + env(safe-area-inset-bottom));box-shadow:0 -6px 20px rgba(0,0,0,0.2);font-size:13.5px;}
+  .install-banner span{flex:1 1 220px;}
+  .install-banner .btn-sm{padding:7px 14px;font-size:13px;}
+  .install-banner .btn-ghost{color:var(--paper);opacity:0.75;}
+  .install-banner .btn-ghost:hover{opacity:1;color:var(--paper);}
   .loading-screen{min-height:70vh;display:flex;align-items:center;justify-content:center;color:var(--ink-soft);font-size:13px;letter-spacing:0.08em;text-transform:uppercase;}
 </style>
 </head>
