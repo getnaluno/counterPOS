@@ -465,7 +465,7 @@ function showReceipt(order){
   const root = document.getElementById("modalRoot");
   root.innerHTML = `
   <div class="receipt-overlay" data-action="close-receipt">
-    <div class="receipt-card" onclick="event.stopPropagation()">
+    <div class="receipt-card">
       <div class="receipt-check">✓</div>
       <h3>Sale Complete</h3>
       <div class="rid">Order #${order.id.slice(-6).toUpperCase()} · ${fmtDate(order.date)}</div>
@@ -665,7 +665,7 @@ function openProductModal(id){
   const editing = id ? shopData.products.find(p=>p.id===id) : null;
   document.getElementById("modalRoot").innerHTML = `
   <div class="modal-backdrop" data-action="close-modal">
-    <div class="modal" onclick="event.stopPropagation()">
+    <div class="modal">
       <h3>${editing?'Edit Product':'Add Product'}</h3>
       <p class="m-note">${editing?'Update the details for this item.':'Fill in the details for the new item.'}</p>
       <div class="field-row">
@@ -710,7 +710,7 @@ function openDeleteConfirm(id){
   if(!p) return;
   document.getElementById("modalRoot").innerHTML = `
   <div class="modal-backdrop" data-action="close-modal">
-    <div class="modal" style="width:380px;" onclick="event.stopPropagation()">
+    <div class="modal" style="width:380px;">
       <h3>Delete “${esc(p.name)}”?</h3>
       <p class="m-note">Are you sure you want to delete this product? This can't be undone.</p>
       <div class="modal-actions">
@@ -727,7 +727,7 @@ function openStockSetModal(id){
   if(!p) return;
   document.getElementById("modalRoot").innerHTML = `
   <div class="modal-backdrop" data-action="close-modal">
-    <div class="modal" style="width:360px;" onclick="event.stopPropagation()">
+    <div class="modal" style="width:360px;">
       <h3>Set Stock — ${esc(p.name)}</h3>
       <p class="m-note">Current stock: ${p.stock}</p>
       <div class="field-row">
@@ -762,7 +762,7 @@ async function stockAdjust(id, delta){
 function openUserModal(){
   document.getElementById("modalRoot").innerHTML = `
   <div class="modal-backdrop" data-action="close-modal">
-    <div class="modal" style="width:360px;" onclick="event.stopPropagation()">
+    <div class="modal" style="width:360px;">
       <h3>Add Staff</h3>
       <div class="field" style="margin-bottom:12px;"><label>Name</label><input id="uf-name" placeholder="Jordan Lee"></div>
       <div class="field"><label>Role</label><select id="uf-role"><option value="Staff">Staff</option><option value="Admin">Admin</option></select></div>
@@ -855,7 +855,7 @@ function openClientModal(id){
   const editing = id ? clientsRegistry.clients.find(c=>c.id===id) : null;
   document.getElementById("modalRoot").innerHTML = `
   <div class="modal-backdrop" data-action="close-modal">
-    <div class="modal" onclick="event.stopPropagation()">
+    <div class="modal">
       <h3>${editing?'Edit Client':'New Client'}</h3>
       <p class="m-note">${editing?'Update this business\u2019s details.':'Create a shop account for a new pop-up business.'}</p>
       <div class="field" style="margin-bottom:12px;"><label>Business Name</label><input id="cf-name" value="${editing?esc(editing.businessName):''}" placeholder="Sunset Coffee Cart"></div>
@@ -921,7 +921,7 @@ function openDeleteClientConfirm(id){
   if(!c) return;
   document.getElementById("modalRoot").innerHTML = `
   <div class="modal-backdrop" data-action="close-modal">
-    <div class="modal" style="width:400px;" onclick="event.stopPropagation()">
+    <div class="modal" style="width:400px;">
       <h3>Delete “${esc(c.businessName)}”?</h3>
       <p class="m-note">This permanently removes the client and all of their products, orders and inventory history. This can't be undone.</p>
       <div class="modal-actions">
@@ -1033,7 +1033,7 @@ document.addEventListener("click", async (e)=>{
       case "cart-dec": cartDec(id); break;
       case "cart-clear": cartClear(); break;
       case "checkout": await checkout(); break;
-      case "close-receipt": closeReceipt(); break;
+      case "close-receipt": if(el.classList.contains("receipt-overlay") && e.target !== el) break; closeReceipt(); break;
 
       case "enter-shop": await enterShop(el.dataset.target); break;
       case "switch-shop": switchShop(); break;
@@ -1061,7 +1061,7 @@ document.addEventListener("click", async (e)=>{
       case "delete-user": await deleteUser(id); break;
 
       case "change-pass": await changePassword(el.dataset.kind); break;
-      case "close-modal": closeModal(); break;
+      case "close-modal": if(el.classList.contains("modal-backdrop") && e.target !== el) break; closeModal(); break;
 
       case "new-client": openClientModal(null); break;
       case "edit-client": openClientModal(id); break;
